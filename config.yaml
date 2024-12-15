@@ -1,0 +1,8 @@
+# Path to the UCI engine executable
+engine_path: "stockfish"
+
+# Address and port for the server to listen on
+server_addr: ":8080"
+
+# Time allocated for the engine to calculate its move in milliseconds
+move_time: 100

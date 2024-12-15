@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            padding: 2rem;
+        }
+        h1 {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 2rem;
+        }
+        #board {
+            width: 500px;
+            margin: 20px auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        #move-info, #engine-info, #move-history {
+            margin-top: 20px;
+            text-align: left;
+            border-left: 2px solid #e9ecef;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            min-height: 300px;
+        }
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+        }
+        .nav-tabs .nav-link {
+            color: #6c757d;
+            font-weight: 500;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .nav-tabs .nav-link:hover {
+            color: #2c3e50;
+            border: none;
+            background: transparent;
+        }
+        .nav-tabs .nav-link.active {
+            color: #0d6efd;
+            border: none;
+            border-bottom: 2px solid #0d6efd;
+            background: transparent;
+        }
+        .btn-primary {
+            padding: 0.8rem 2rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(13,110,253,0.2);
+        }
+        p {
+            margin-bottom: 0.8rem;
+            line-height: 1.6;
+        }
+        strong {
+            color: #2c3e50;
+        }
+        ol {
+            padding-left: 1.2rem;
+        }
+        li {
+            margin-bottom: 0.5rem;
+        }
+        #move-history .btn {
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">MicroUCI</h1>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div id="board"></div>
+                <div class="text-center mt-4">
+                    <button class="btn btn-primary" onclick="startNewGame()">Start New Game</button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <ul class="nav nav-tabs" id="infoTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="move-info-tab" data-bs-toggle="tab" data-bs-target="#move-info" type="button" role="tab" aria-controls="move-info" aria-selected="true">Move Info</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="engine-info-tab" data-bs-toggle="tab" data-bs-target="#engine-info" type="button" role="tab" aria-controls="engine-info" aria-selected="false">Engine Info</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="move-history-tab" data-bs-toggle="tab" data-bs-target="#move-history" type="button" role="tab" aria-controls="move-history" aria-selected="false">Move History</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="infoTabsContent">
+                    <div class="tab-pane fade" id="move-info" role="tabpanel" aria-labelledby="move-info-tab"></div>
+                    <div class="tab-pane fade" id="engine-info" role="tabpanel" aria-labelledby="engine-info-tab"></div>
+                    <div class="tab-pane fade show active" id="move-history" role="tabpanel" aria-labelledby="move-history-tab"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let board;
+        let legalMoves = [];
+
+        function startNewGame() {
+            fetch('/new')
+                .then(response => response.json())
+                .then(data => {
+                    updateBoard();
+                })
+                .catch(error => console.error('Error starting new game:', error));
+        }
+
+        function updateBoard() {
+            fetch('/fen')
+                .then(response => response.json())
+                .then(data => {
+                    board.position(data.fen);
+                    legalMoves = data.legal_moves;
+                    displayMoveHistory(data.pgn);
+                })
+                .catch(error => console.error('Error updating board:', error));
+        }
+
+        function onDrop(source, target) {
+            const move = {
+                from: source,
+                to: target,
+                promotion: 'q' // promote to queen for simplicity
+            };
+
+            const moveString = `${move.from}${move.to}`;
+            if (!legalMoves.includes(moveString)) {
+                console.error('Illegal move attempted:', moveString);
+                updateBoard(); // revert to the last valid position
+                return;
+            }
+
+            fetch(`/move?uci=${moveString}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error making move:', data.error);
+                        updateBoard(); // revert to the last valid position
+                    } else {
+                        board.position(data.fen);
+                        legalMoves = data.legal_moves;
+                        displayMoveInfo(data.info);
+                        displayMoveHistory(data.pgn);
+                    }
+                })
+                .catch(error => console.error('Error making move:', error));
+        }
+
+
+
+        function displayMoveInfo(info) {
+            if (!info || Object.keys(info).length === 0) {
+                document.getElementById('move-info').innerHTML = '<p class="text-muted">No move info available yet</p>';
+                return;
+            }
+
+            let moveInfo = '';
+
+            function processObject(obj, indent = 0) {
+                for (const [key, value] of Object.entries(obj)) {
+                    const indentStr = '&nbsp;'.repeat(indent * 4);
+                    const displayKey = key.charAt(0).toUpperCase() + key.slice(1);
+                    
+                    if (typeof value === 'object' && value !== null) {
+                        moveInfo += `<p>${indentStr}<strong>${displayKey}:</strong></p>`;
+                        processObject(value, indent + 1);
+                    } else {
+                        moveInfo += `<p>${indentStr}<strong>${displayKey}:</strong> ${value}</p>`;
+                    }
+                }
+            }
+            
+            processObject(info);
+            document.getElementById('move-info').innerHTML = moveInfo;
+        }
+
+        function displayMoveHistory(pgn) {
+            const historyElement = document.getElementById('move-history');
+            
+            if (!pgn || pgn.length === 0) {
+                historyElement.innerHTML = '<p class="text-muted">No moves played yet</p>';
+                return;
+            }
+
+            let moveHistory = '<ol>';
+            for (let i = 0; i < pgn.length; i += 2) {
+                const movePair = pgn[i] + (pgn[i + 1] ? `\t${pgn[i + 1]}` : '');
+                moveHistory += `<li>${movePair}</li>`;
+            }
+            moveHistory += '</ol>';
+            historyElement.innerHTML = moveHistory;
+
+            const downloadButton = document.createElement('button');
+            downloadButton.textContent = 'Download PGN';
+            downloadButton.className = 'btn btn-primary'; 
+            downloadButton.onclick = function() {
+                let numberedPgn = '';
+                for (let i = 0; i < pgn.length; i += 2) {
+                    const moveNumber = Math.floor(i / 2) + 1;
+                    const whiteMove = pgn[i];
+                    const blackMove = pgn[i + 1] ? ` ${pgn[i + 1]}` : '';
+                    numberedPgn += `${moveNumber}. ${whiteMove}${blackMove} `;
+                }
+                const blob = new Blob([numberedPgn.trim()], { type: 'application/x-chess-pgn' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'microuci.pgn';
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+            historyElement.appendChild(downloadButton);
+        }
+
+        function fetchEngineInfo() {
+            fetch('/info')
+                .then(response => response.json())
+                .then(data => {
+                    let engineInfo = '';
+                    
+                    function processObject(obj, indent = 0) {
+                        const indentStr = '&nbsp;'.repeat(indent * 4);
+                        for (const [key, value] of Object.entries(obj)) {
+                            const displayKey = key.charAt(0).toUpperCase() + key.slice(1);
+                            if (typeof value === 'object' && value !== null) {
+                                engineInfo += `<p>${indentStr}<strong>${displayKey}:</strong></p>`;
+                                processObject(value, indent + 1);
+                            } else {
+                                engineInfo += `<p>${indentStr}<strong>${displayKey}:</strong> ${value}</p>`;
+                            }
+                        }
+                    }
+                    
+                    processObject(data);
+                    document.getElementById('engine-info').innerHTML = engineInfo;
+                })
+                .catch(error => console.error('Error fetching engine info:', error));
+        }
+
+        $(document).ready(function() {
+            board = Chessboard('board', {
+                draggable: true,
+                pieceTheme: '/img?piece={piece}.png',
+                onDrop: onDrop
+            });
+
+            updateBoard();
+            fetchEngineInfo();
+        });
+    </script>
+</body>
+</html>
